@@ -557,7 +557,7 @@ if ! command -v nvidia-smi &> /dev/null; then
     warn "nvidia-smi command not found. Please ensure NVIDIA drivers are installed."
     NUM_GPUS=0
 else
-    NUM_GPUS=$(nvidia-smi --query-gpu=name --format=csv,noheader | wc -l)
+    NUM_GPUS=1
 
     if [ "$NUM_GPUS" -gt 0 ]; then
         nvidia-smi --query-gpu=memory.total --format=csv,noheader,nounits | while read -r memory; do
