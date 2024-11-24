@@ -27,6 +27,7 @@ import bittensor as bt
 from typing import List, Dict
 from types import SimpleNamespace
 from filelock import FileLock, Timeout
+import gzip 
 from aiobotocore.session import get_session
 import re
 import sys
@@ -232,48 +233,63 @@ async def upload_slice_for_window(
             os.remove(temp_file_name)
             logger.debug(f"Temporary file {temp_file_name} removed")
 
-async def upload_master(bucket: str, model: torch.nn.Module, wallet: 'bt.wallet'):
+
+
+async def upload_master(bucket: str, model: torch.nn.Module, wallet: 'bt.wallet', subtensor: 'bt.subtensor', last_upload_block: int):
     """
-    Uploads the master PyTorch model to an S3 bucket.
+    Periodically uploads the master PyTorch model to an S3 bucket every 1000 blocks.
 
     Args:
         bucket (str): Name of the S3 bucket.
         model (torch.nn.Module): The PyTorch model to be uploaded.
         wallet (bt.wallet): The wallet object containing the hotkey.
+        subtensor (bt.subtensor): Subtensor connection to get the current block.
+        last_upload_block (int): The block number when the last upload occurred.
+
+    Returns:
+        int: The block number when the upload occurred, updated if an upload was performed.
     """
-    upload_filename = f'master-{wallet.hotkey.ss58_address}.pt'
-    logger.debug(f"Uploading master model to S3: {upload_filename}")
+    current_block = subtensor.block
+    if current_block % 1000 == 0 and current_block != last_upload_block:
+        upload_filename = f'master-{wallet.hotkey.ss58_address}-block{current_block}-v{__version__}.pt.gz'
+        logger.debug(f"Uploading master model to S3: {upload_filename}")
 
-    session = get_session()
-    async with session.create_client(
-        's3',
-        region_name='us-east-1',
-        config=client_config,
-        aws_access_key_id=AWS_ACCESS_KEY_ID,
-        aws_secret_access_key=AWS_SECRET_ACCESS_KEY
-    ) as s3_client:
-        try:
-            # Create a temporary file and write the model state dictionary to it
-            with tempfile.NamedTemporaryFile(delete=False) as temp_file:
-                torch.save(model.state_dict(), temp_file)
-                temp_file_name = temp_file.name
+        session = get_session()
+        async with session.create_client(
+            's3',
+            region_name='us-east-1',
+            config=client_config,
+            aws_access_key_id=AWS_ACCESS_KEY_ID,
+            aws_secret_access_key=AWS_SECRET_ACCESS_KEY
+        ) as s3_client:
+            try:
+                # Create a temporary compressed file
+                with tempfile.NamedTemporaryFile(delete=False, suffix='.pt.gz') as temp_file:
+                    with gzip.GzipFile(fileobj=temp_file, mode='wb') as f:
+                        torch.save(model.state_dict(), f)
+                    temp_file_name = temp_file.name
 
-            # Upload the file to S3
-            with open(temp_file_name, 'rb') as f:
-                await s3_client.put_object(Bucket=bucket, Key=upload_filename, Body=f)
-            # Set the object ACL to public-read
-            await s3_client.put_object_acl(
-                Bucket=bucket,
-                Key=upload_filename,
-                ACL='public-read'
-            )
-            logger.debug(f"Successfully uploaded master model to S3: {upload_filename}")
-        except Exception:
-            logger.exception(f"Failed to upload master model {upload_filename} to S3")
-        finally:
-            # Clean up the temporary file
-            os.remove(temp_file_name)
-            logger.debug(f"Temporary file {temp_file_name} removed")
+                # Upload the file to S3
+                async with aiofiles.open(temp_file_name, 'rb') as f:
+                    await s3_client.put_object(Bucket=bucket, Key=upload_filename, Body=await f.read())
+
+                # Set the object ACL to public-read
+                await s3_client.put_object_acl(
+                    Bucket=bucket,
+                    Key=upload_filename,
+                    ACL='public-read'
+                )
+                logger.info(f"Successfully uploaded master model to S3 at block {current_block}: {upload_filename}")
+            except Exception:
+                logger.exception(f"Failed to upload master model {upload_filename} to S3")
+            finally:
+                # Clean up the temporary file
+                os.remove(temp_file_name)
+                logger.debug(f"Temporary file {temp_file_name} removed")
+
+        # Update the last upload block
+        return current_block
+    return last_upload_block
 
 async def get_indices_for_window(model: torch.nn.Module, seed: str, compression: int) -> Dict[str, torch.LongTensor]:
     """

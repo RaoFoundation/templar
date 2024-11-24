@@ -271,8 +271,8 @@ class Miner:
                 tplr.logger.info('[bold]' + '\n' + '-' * 40 + f' Step: {self.global_step} ' + '-' * 40)
                 self.global_step += 1
 
-                # Save checkpoint every 500 steps
-                if self.global_step % 500 == 0:
+                # Save checkpoint every 10 steps
+                if self.global_step % 10 == 0:
                     tplr.logger.info(f"Scheduling checkpoint save at global step {self.global_step}")
                     # Schedule the tplr.save_checkpoint function to run asynchronously
                     asyncio.create_task(tplr.save_checkpoint(
