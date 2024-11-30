@@ -107,11 +107,10 @@ class Miner:
         try:
             tplr.logger.info(f'bucket_name: {tplr.config.BUCKET_SECRETS["bucket_name"]}')
             commitment = self.chain_manager.get_commitment(self.uid)
-            current_bucket = tplr.Bucket(
-                name=tplr.config.BUCKET_SECRETS["bucket_name"],
-                account_id=tplr.config.BUCKET_SECRETS["account_id"],
-                access_key_id=tplr.config.BUCKET_SECRETS["access_key_id"],
-                secret_access_key=tplr.config.BUCKET_SECRETS["secret_access_key"]
+            current_bucket = (
+                tplr.config.BUCKET_SECRETS["account_id"] +
+                tplr.config.BUCKET_SECRETS["access_key_id"] +
+                tplr.config.BUCKET_SECRETS["secret_access_key"]
             )
             if current_bucket != commitment:
                 # TODO: Handle mismatched commitments
