@@ -19,7 +19,6 @@
 # Global imports.
 import sys
 import time 
-import wandb
 import torch
 import random
 import asyncio
@@ -180,7 +179,7 @@ class Miner:
                     tplr.logger.error(f"Failed to delete {file_path}: {e}")  
 
         # Load checkpoint if it exists
-        self.checkpoint_path = f"checkpoint-V1.pth" if self.config.checkpoint_path is None else self.config.checkpoint_path 
+        self.checkpoint_path = "checkpoint-V1.pth" if self.config.checkpoint_path is None else self.config.checkpoint_path 
         if os.path.exists(self.checkpoint_path):
             tplr.logger.info(f"Loading checkpoint from {self.checkpoint_path}")
             global_step, _ = asyncio.run(tplr.load_checkpoint(
